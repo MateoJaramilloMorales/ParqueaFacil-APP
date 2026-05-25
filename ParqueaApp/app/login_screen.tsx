@@ -1,219 +1,240 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, SafeAreaView, StatusBar, Dimensions } from 'react-native';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store'; // 🛡️ Importación agregada para solucionar el rebote
+import { LinearGradient } from 'expo-linear-gradient';
+import * as SecureStore from 'expo-secure-store'; 
 
-const { width } = Dimensions.get('window');
+const { height, width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isEmailFocused, setIsEmailFocused] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (!email || !password) return Alert.alert("Atención", "Por favor completa todos los campos.");
-    
+    if (!email || !password) {
+      return Alert.alert("Campos vacíos", "Por favor ingresa tu correo y contraseña.");
+    }
+
     setLoading(true);
     try {
-      const res = await axios.post('http://192.168.1.70:3001/login', { 
-        email: email.trim().toLowerCase(), 
-        password 
+      const response = await axios.post('http://192.168.1.70:3001/login', {
+        email: email.trim().toLowerCase(),
+        password: password
       });
-      
-      // Validamos que el backend haya respondido con éxito
-      if (res.data && res.data.success !== false) {
-        // Tu backend devuelve el objeto del usuario (ya sea directo o dentro de res.data.usuario)
-        const user = res.data.usuario || res.data;
 
-        // 🔑 PASO CRUCIAL: Guardamos las credenciales en el almacenamiento seguro
-        await SecureStore.setItemAsync('usuario_email', user.email);
-        await SecureStore.setItemAsync('usuario_nombre', user.nombre || 'Usuario');
+      if (response.data) {
+        await SecureStore.setItemAsync('usuario_email', response.data.email || email.trim().toLowerCase());
+        await SecureStore.setItemAsync('usuario_nombre', response.data.nombre || 'Usuario');
+        await SecureStore.setItemAsync('usuario_rol', response.data.rol || 'cliente');
+
+        Alert.alert("¡Bienvenido!", `Hola de nuevo, ${response.data.nombre || 'Usuario'}`);
         
-        // Mapeamos el rol del backend para que tu index.tsx lo reconozca perfectamente
-        const rolFormateado = (user.rol === 'admin' || user.rol === 'dueño') ? 'dueño' : 'conductor';
-        await SecureStore.setItemAsync('usuario_rol', rolFormateado);
-
-        // Redirección inteligente utilizando tus rutas fijas
-        if (rolFormateado === 'dueño') {
+        const rolUsuario = response.data.rol;
+        
+        if (rolUsuario === 'admin' || rolUsuario === 'dueno') {
           router.replace('/admin_panel');
+        } else if (rolUsuario === 'user_panel' || rolUsuario === 'cliente') {
+          router.replace('/user_panel');
         } else {
           router.replace('/user_panel');
         }
-      } else {
-        Alert.alert("Error de Acceso", res.data.message || "Los datos no coinciden. Inténtalo de nuevo.");
       }
-    } catch (error) {
-      console.log("Error en Login:", error);
-      Alert.alert("Error de Acceso", "Los datos no coinciden o no hay conexión con el servidor.");
+    } catch (e: any) {
+      const msgError = e.response?.data?.error || "Correo o contraseña incorrectos. Verifica tus datos.";
+      Alert.alert("Error de acceso", msgError);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"} 
-      style={styles.container}
-    >
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        
-        {/* BOTÓN VOLVER - ESTILO MINIMALISTA */}
-        <TouchableOpacity style={styles.backCircle} onPress={() => router.replace('/')}>
-          <Ionicons name="chevron-back" size={24} color="#2563EB" />
-        </TouchableOpacity>
-
-        {/* ILUSTRACIÓN O EMOJI CENTRAL */}
-        <View style={styles.iconContainer}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="car-sport" size={50} color="#2563EB" />
-          </View>
-        </View>
-
-        <View style={styles.textHeader}>
-          <Text style={styles.title}>¡Hola de nuevo!</Text>
-          <Text style={styles.subtitle}>Encuentra el lugar perfecto para tu vehículo en Medellín.</Text>
-        </View>
-
-        {/* FORMULARIO ESTILO CARD */}
-        <View style={styles.card}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>CORREO ELECTRÓNICO</Text>
-            <View style={styles.inputBox}>
-              <Ionicons name="mail-unread-outline" size={20} color="#94A3B8" />
-              <TextInput 
-                style={styles.input} 
-                placeholder="tu@correo.com" 
-                placeholderTextColor="#CBD5E1"
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>CONTRASEÑA</Text>
-            <View style={styles.inputBox}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#94A3B8" />
-              <TextInput 
-                style={styles.input} 
-                placeholder="••••••••" 
-                placeholderTextColor="#CBD5E1"
-                secureTextEntry={!showPassword}
-                onChangeText={setPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.mainBtn, loading && styles.btnDisabled]} 
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <>
-                <Text style={styles.mainBtnText}>ACCEDER AL MAPA</Text>
-                <Ionicons name="arrow-forward" size={20} color="#FFF" style={{marginLeft: 10}} />
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* FOOTER */}
-        <TouchableOpacity 
-          style={styles.footerBtn}
-          onPress={() => router.push('/register_screen')}
+    <View style={styles.masterContainer}>
+      <StatusBar barStyle="dark-content" />
+      <LinearGradient colors={['#F8FAFC', '#EEF2F6', '#E2E8F0']} style={StyleSheet.absoluteFillObject} />
+      
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={styles.keyboardView}
         >
-          <Text style={styles.footerText}>
-            ¿Nuevo en ParqueaFácil? <Text style={styles.footerLink}>Crea una cuenta</Text>
-          </Text>
-        </TouchableOpacity>
+          <ScrollView 
+            contentContainerStyle={styles.scrollContainer} 
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            
+            {/* ILUSTRACIÓN / ICONO SUPERIOR */}
+            <View style={styles.headerContainer}>
+              <LinearGradient colors={['#EFF6FF', '#DBEAFE']} style={styles.logoCircle}>
+                <Ionicons name="car-sport" size={44} color="#2563EB" />
+              </LinearGradient>
+              <Text style={styles.title}>ParqueaFácil</Text>
+              <Text style={styles.subtitle}>Gestiona tus celdas de parqueo o reserva tu cupo en tiempo real</Text>
+            </View>
 
-      </ScrollView>
-    </KeyboardAvoidingView>
+            {/* TARJETA CONTENEDORA (FORMULARIO) */}
+            <View style={styles.cardForm}>
+              
+              {/* Campo Correo */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Correo Electrónico</Text>
+                <View style={[
+                  styles.inputWrapper, 
+                  isEmailFocused && styles.inputWrapperFocused
+                ]}>
+                  <Ionicons name="mail-outline" size={20} color={isEmailFocused ? "#2563EB" : "#94A3B8"} style={styles.icon} />
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="ejemplo@correo.com" 
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="email-address" 
+                    autoCapitalize="none" 
+                    value={email} 
+                    onChangeText={setEmail}
+                    onFocus={() => setIsEmailFocused(true)}
+                    onBlur={() => setIsEmailFocused(false)}
+                  />
+                </View>
+              </View>
+
+              {/* Campo Contraseña */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Contraseña</Text>
+                <View style={[
+                  styles.inputWrapper, 
+                  isPasswordFocused && styles.inputWrapperFocused
+                ]}>
+                  <Ionicons name="lock-closed-outline" size={20} color={isPasswordFocused ? "#2563EB" : "#94A3B8"} style={styles.icon} />
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="••••••••" 
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showPassword} 
+                    autoCapitalize="none"
+                    value={password} 
+                    onChangeText={setPassword}
+                    onFocus={() => setIsPasswordFocused(true)}
+                    onBlur={() => setIsPasswordFocused(false)}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                    <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Botón Ingresar */}
+              <TouchableOpacity activeOpacity={0.85} style={styles.btnLogin} onPress={handleLogin} disabled={loading}>
+                <LinearGradient colors={['#2563EB', '#1D4ED8']} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={styles.gradientBtn}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnLoginText}>INGRESAR AL PANEL</Text>}
+                </LinearGradient>
+              </TouchableOpacity>
+
+            </View>
+
+            {/* Enlace de Registro Inferior */}
+            <TouchableOpacity style={styles.btnRegisterLink} onPress={() => router.replace('/register_screen')}>
+              <Text style={styles.registerLinkText}>
+                ¿No tienes una cuenta? <Text style={styles.registerAccent}>Regístrate aquí</Text>
+              </Text>
+            </TouchableOpacity>
+
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  scroll: { padding: 25, paddingTop: 60 },
-  backCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20
+  masterContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  safeArea: { flex: 1 },
+  keyboardView: { flex: 1 },
+  scrollContainer: { 
+    paddingHorizontal: 22, 
+    paddingBottom: 40, 
+    paddingTop: height * 0.07, 
+    alignItems: 'center' 
   },
-  iconContainer: { alignItems: 'center', marginBottom: 20 },
-  iconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
+  headerContainer: { alignItems: 'center', marginBottom: 35 },
+  logoCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
     borderWidth: 1,
-    borderColor: '#DBEAFE'
+    borderColor: '#E2E8F0',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 4,
   },
-  textHeader: { alignItems: 'center', marginBottom: 35 },
-  title: { fontSize: 30, fontWeight: '800', color: '#1E293B', textAlign: 'center' },
-  subtitle: { fontSize: 15, color: '#64748B', textAlign: 'center', marginTop: 10, lineHeight: 22, paddingHorizontal: 20 },
+  title: { fontSize: 32, fontWeight: '900', color: '#0F172A', textAlign: 'center', letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, color: '#475569', marginTop: 8, textAlign: 'center', paddingHorizontal: 20, lineHeight: 20 },
   
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 30,
-    padding: 20,
-    shadowColor: '#000',
+  cardForm: { 
+    backgroundColor: '#FFFFFF', 
+    width: '100%', 
+    borderRadius: 24, 
+    padding: 24,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.05,
     shadowRadius: 20,
     elevation: 5,
-    borderWidth: 1,
-    borderColor: '#F1F5F9'
   },
   inputGroup: { marginBottom: 20 },
-  inputLabel: { fontSize: 11, fontWeight: '800', color: '#94A3B8', marginBottom: 8, marginLeft: 5, letterSpacing: 1 },
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 18,
-    paddingHorizontal: 15,
-    height: 60,
-    borderWidth: 1,
-    borderColor: '#F1F5F9'
+  label: { fontSize: 13, fontWeight: '700', color: '#1E293B', marginBottom: 8, marginLeft: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
+  inputWrapper: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F8FAFC', 
+    borderRadius: 16, 
+    borderWidth: 1.5, 
+    borderColor: '#F1F5F9', 
+    paddingHorizontal: 16 
   },
-  input: { flex: 1, marginLeft: 12, fontSize: 16, color: '#1E293B', fontWeight: '500' },
+  inputWrapperFocused: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#FFFFFF',
+  },
+  icon: { marginRight: 12 },
+  input: { 
+    flex: 1, 
+    paddingVertical: Platform.OS === 'ios' ? 15 : 12, 
+    fontSize: 15, 
+    color: '#0F172A', 
+    fontWeight: '500' 
+  },
+  eyeIcon: { padding: 4 },
   
-  mainBtn: {
-    backgroundColor: '#2563EB',
-    height: 65,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
+  btnLogin: { 
+    width: '100%', 
+    marginTop: 10, 
+    borderRadius: 16,
+    overflow: 'hidden',
     shadowColor: '#2563EB',
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 8
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    elevation: 3,
   },
-  btnDisabled: { backgroundColor: '#94A3B8', shadowOpacity: 0 },
-  mainBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-  
-  footerBtn: { marginTop: 30, alignItems: 'center' },
-  footerText: { color: '#64748B', fontSize: 15 },
-  footerLink: { color: '#2563EB', fontWeight: 'bold' }
+  gradientBtn: {
+    padding: 16, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+  },
+  btnLoginText: { color: '#FFF', fontWeight: '800', fontSize: 15, letterSpacing: 0.8 },
+  btnRegisterLink: { marginTop: 35, alignItems: 'center', padding: 10 },
+  registerLinkText: { color: '#475569', fontSize: 14, fontWeight: '500' },
+  registerAccent: { fontWeight: '700', color: '#2563EB', textDecorationLine: 'underline' }
 });
