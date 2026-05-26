@@ -31,77 +31,77 @@ app.get('/parqueaderos', async (req, res) => {
     res.json(data);
 });
 
-// 1. OBTENER SÓLO MIS PARQUEADEROS (🛠️ Actualizado de owner_email a admin_email)
+// 1. OBTENER SÓLO MIS PARQUEADEROS
 app.get('/mis-parqueaderos/:email', async (req, res) => {
-  const { email } = req.params;
-  
-  if (!email || email === 'undefined') {
-    return res.status(400).json({ error: "El email del administrador no es válido." });
-  }
-  
-  try {
-    const { data, error } = await supabase
-      .from('parqueaderos')
-      .select('*')
-      .eq('admin_email', email.trim().toLowerCase());
-
-    if (error) return res.status(400).json({ error: error.message });
-    res.json(data || []);
-  } catch (err) {
-    res.status(500).json({ error: "Error al obtener parqueaderos propios." });
-  }
-});
-
-// 2. OBTENER HISTORIAL DE RESERVAS FILTRADO (🛠️ Actualizado de owner_email a admin_email)
-app.get('/mis-reservas/:email', async (req, res) => {
-  const { email } = req.params;
-  
-  if (!email || email === 'undefined') {
-    return res.status(400).json({ error: "El email del administrador no es válido." });
-  }
-  
-  try {
-    // Paso 1: Mapear los parqueaderos que pertenecen a este administrador
-    const { data: misParqueaderos, error: pError } = await supabase
-      .from('parqueaderos')
-      .select('id, nombre')
-      .eq('admin_email', email.trim().toLowerCase());
-
-    if (pError) return res.status(400).json({ error: pError.message });
-    if (!misParqueaderos || misParqueaderos.length === 0) {
-      return res.json([]); // Si no tiene parqueaderos, lógicamente no hay reservas
+    const { email } = req.params;
+    
+    if (!email || email === 'undefined') {
+        return res.status(400).json({ error: "El email del administrador no es válido." });
     }
+    
+    try {
+        const { data, error } = await supabase
+            .from('parqueaderos')
+            .select('*')
+            .eq('admin_email', email.trim().toLowerCase());
 
-    // Extraer lista limpia de IDs (Ej: [12, 15, 23])
-    const listaIds = misParqueaderos.map(p => p.id);
-
-    // Paso 2: Traer reservas exclusivas asociadas a la lista de parqueaderos del dueño
-    const { data: reservas, error: rError } = await supabase
-      .from('reservas')
-      .select('*')
-      .in('parqueadero_id', listaIds)
-      .order('created_at', { ascending: false });
-
-    if (rError) return res.status(400).json({ error: rError.message });
-
-    // Paso 3: Acoplar de manera limpia el objeto "parqueaderos: { nombre }"
-    const resultadoAdaptado = reservas.map(r => {
-      const pEncontrado = misParqueaderos.find(p => p.id === r.parqueadero_id);
-      return {
-        ...r,
-        parqueaderos: {
-          nombre: pEncontrado ? pEncontrado.nombre : 'Parqueadero Eliminado'
-        }
-      };
-    });
-
-    res.json(resultadoAdaptado);
-  } catch (err) {
-    res.status(500).json({ error: "Error en procesamiento interno de reservas filtradas." });
-  }
+        if (error) return res.status(400).json({ error: error.message });
+        res.json(data || []);
+    } catch (err) {
+        res.status(500).json({ error: "Error al obtener parqueaderos propios." });
+    }
 });
 
-// INDEPENDENCIA TOTAL: Obtener la reserva activa exclusiva de un conductor
+// 2. OBTENER HISTORIAL DE RESERVAS FILTRADO PARA UN ADMINISTRADOR
+app.get('/mis-reservas/:email', async (req, res) => {
+    const { email } = req.params;
+    
+    if (!email || email === 'undefined') {
+        return res.status(400).json({ error: "El email del administrador no es válido." });
+    }
+    
+    try {
+        // Paso 1: Mapear los parqueaderos que pertenecen a este administrador
+        const { data: misParqueaderos, error: pError } = await supabase
+            .from('parqueaderos')
+            .select('id, nombre')
+            .eq('admin_email', email.trim().toLowerCase());
+
+        if (pError) return res.status(400).json({ error: pError.message });
+        if (!misParqueaderos || misParqueaderos.length === 0) {
+            return res.json([]); 
+        }
+
+        // Extraer lista limpia de IDs (Ej: [12, 15, 23])
+        const listaIds = misParqueaderos.map(p => p.id);
+
+        // Paso 2: Traer reservas exclusivas asociadas a la lista de parqueaderos del dueño
+        const { data: reservas, error: rError } = await supabase
+            .from('reservas')
+            .select('*')
+            .in('parqueadero_id', listaIds)
+            .order('created_at', { ascending: false });
+
+        if (rError) return res.status(400).json({ error: rError.message });
+
+        // Paso 3: Acoplar de manera limpia el objeto "parqueaderos: { nombre }"
+        const resultadoAdaptado = reservas.map(r => {
+            const pEncontrado = misParqueaderos.find(p => p.id === r.parqueadero_id);
+            return {
+                ...r,
+                parqueaderos: {
+                    nombre: pEncontrado ? pEncontrado.nombre : 'Parqueadero Eliminado'
+                }
+            };
+        });
+
+        res.json(resultadoAdaptado);
+    } catch (err) {
+        res.status(500).json({ error: "Error en procesamiento interno de reservas filtradas." });
+    }
+});
+
+// Obtener la reserva activa exclusiva de un conductor
 app.get('/reserva-activa/:email', async (req, res) => {
     const { email } = req.params;
     const { data, error } = await supabase
@@ -150,7 +150,7 @@ app.get('/historial-reservas', async (req, res) => {
     }
 });
 
-// INDEPENDENCIA TOTAL: Historial aislado de un solo cliente
+// Historial aislado de un solo cliente
 app.get('/historial-reservas-cliente/:email', async (req, res) => {
     const { email } = req.params;
     try {
@@ -185,7 +185,7 @@ app.get('/historial-reservas-cliente/:email', async (req, res) => {
     }
 });
 
-// MÉTRICAS INDEPENDIENTES: Dashboard exclusivo para el dueño del parqueadero
+// Dashboard de métricas exclusivo para el dueño del parqueadero
 app.get('/admin/metricas/:parqueadero_id', async (req, res) => {
     const { parqueadero_id } = req.params;
     try {
@@ -259,44 +259,44 @@ app.post('/registro', async (req, res) => {
     }
 });
 
-// 3. REGISTRAR PARQUEADERO (🛠️ Corregido de owner_email a admin_email)
+// Registrar parqueadero
 app.post('/parqueaderos', async (req, res) => {
-  const {
-    nombre, direccion, cupos_totales, cupos_disponibles,
-    lat, lng, precio, metodo_pago, fotos, estado_operacion, tipo_vehiculo, admin_email
-  } = req.body;
+    const {
+        nombre, direccion, cupos_totales, cupos_disponibles,
+        lat, lng, precio, metodo_pago, fotos, estado_operacion, tipo_vehiculo, admin_email
+    } = req.body;
 
-  if (!nombre || !precio || !admin_email) {
-    return res.status(400).json({ error: "Faltan parámetros obligatorios (nombre, precio o admin_email)." });
-  }
+    if (!nombre || !precio || !admin_email) {
+        return res.status(400).json({ error: "Faltan parámetros obligatorios (nombre, precio o admin_email)." });
+    }
 
-  try {
-    const { data, error } = await supabase
-      .from('parqueaderos')
-      .insert([{
-        nombre,
-        direccion: direccion || "Ubicación seleccionada",
-        cupos_totales: parseInt(cupos_totales) || 0,
-        cupos_disponibles: parseInt(cupos_disponibles) || 0,
-        lat: parseFloat(lat),
-        lng: parseFloat(lng),
-        precio: parseFloat(precio),
-        metodo_pago,
-        fotos: fotos || [],
-        estado_operacion: estado_operacion || 'abierto',
-        tipo_vehiculo: tipo_vehiculo || 'ambos',
-        admin_email: admin_email.trim().toLowerCase() // 🔑 Mapeado perfecto a la base de datos
-      }])
-      .select();
+    try {
+        const { data, error } = await supabase
+            .from('parqueaderos')
+            .insert([{
+                nombre,
+                direccion: direccion || "Ubicación seleccionada",
+                cupos_totales: parseInt(cupos_totales) || 0,
+                cupos_disponibles: parseInt(cupos_disponibles) || 0,
+                lat: parseFloat(lat),
+                lng: parseFloat(lng),
+                precio: parseFloat(precio),
+                metodo_pago,
+                fotos: fotos || [],
+                estado_operacion: estado_operacion || 'abierto',
+                tipo_vehiculo: tipo_vehiculo || 'ambos',
+                admin_email: admin_email.trim().toLowerCase()
+            }])
+            .select();
 
-    if (error) return res.status(400).json({ error: error.message });
-    res.status(201).json(data);
-  } catch (err) {
-    res.status(500).json({ error: "Error interno al crear parqueadero." });
-  }
+        if (error) return res.status(400).json({ error: error.message });
+        res.status(201).json(data);
+    } catch (err) {
+        res.status(500).json({ error: "Error interno al crear parqueadero." });
+    }
 });
 
-// Lógica de reservas
+// Registrar una nueva reserva de cupo
 app.post('/reservar-cupo', async (req, res) => {
     const { id, cantidad, tiempoHoras, tipo, usuario_email, usuario_nombre, metodo } = req.body;
     const TIEMPO_MS = tiempoHoras * 60 * 60 * 1000;
@@ -341,10 +341,15 @@ app.post('/reservar-cupo', async (req, res) => {
             .eq('id', id);
 
         setTimeout(async () => {
-            const { data: pCheck } = await supabase.from('parqueaderos').select('cupos_disponibles').eq('id', id).single();
-            if (pCheck) {
-                await supabase.from('parqueaderos').update({ cupos_disponibles: pCheck.cupos_disponibles + cantidad }).eq('id', id);
-                console.log(`⏰ Cupos liberados automáticamente para parqueadero ID: ${id}`);
+            // Liberación automática al expirar el tiempo establecido
+            const { data: reservaActual } = await supabase.from('reservas').select('estado').eq('id', resData[0].id).single();
+            if (reservaActual && reservaActual.estado === 'activa') {
+                const { data: pCheck } = await supabase.from('parqueaderos').select('cupos_disponibles').eq('id', id).single();
+                if (pCheck) {
+                    await supabase.from('parqueaderos').update({ cupos_disponibles: pCheck.cupos_disponibles + cantidad }).eq('id', id);
+                    await supabase.from('reservas').update({ estado: 'completada' }).eq('id', resData[0].id);
+                    console.log(`⏰ Cupos liberados automáticamente para parqueadero ID: ${id}`);
+                }
             }
         }, TIEMPO_MS);
 
@@ -355,7 +360,7 @@ app.post('/reservar-cupo', async (req, res) => {
     }
 });
 
-// Cancelar o borrar reserva
+// CANCELAR RESERVA (Admin/User)
 app.post('/cancelar-reserva/:id', async (req, res) => {
     const { id } = req.params;
 
@@ -387,8 +392,47 @@ app.post('/cancelar-reserva/:id', async (req, res) => {
                 .eq('id', reserva.parqueadero_id);
         }
 
-        res.json({ success: true });
+        res.json({ success: true, message: "Reserva cancelada y cupos liberados." });
 
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// AUMENTAR / EXTENDER RESERVA (Admin)
+app.post('/extender-reserva/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data: reserva, error: rError } = await supabase
+            .from('reservas')
+            .select('*, parqueaderos(precio)')
+            .eq('id', id)
+            .single();
+
+        if (rError || !reserva) return res.status(404).json({ error: "Reserva no encontrada." });
+        if (reserva.estado !== 'activa') return res.status(400).json({ error: "Solo se pueden extender reservas activas." });
+
+        const precioHoraBase = reserva.parqueaderos?.precio || 0;
+        const tipoVehiculo = reserva.vehiculo_tipo;
+        const celdas = reserva.cantidad_celdas;
+        
+        const factorTipo = tipoVehiculo === 'moto' ? 0.5 : 1.0;
+        const costoHoraExtra = Math.round(precioHoraBase * factorTipo * celdas);
+
+        const nuevasHoras = reserva.horas_reservadas + 1;
+        const nuevoTotal = reserva.total_pago + costoHoraExtra;
+
+        const { data: updated, error: uError } = await supabase
+            .from('reservas')
+            .update({
+                horas_reservadas: nuevasHoras,
+                total_pago: nuevoTotal
+            })
+            .eq('id', id)
+            .select();
+
+        if (uError) throw uError;
+        res.json({ success: true, data: updated });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -411,27 +455,64 @@ app.post('/liberar-cupo', async (req, res) => {
 // --- MÉTODOS PUT (Actualizaciones) --------
 // ==========================================
 
-// Gestión de perfiles de usuario
+// 🔄 GESTIÓN DE PERFILES: Actualiza únicamente Nombre y Contraseña. Correo Electrónico Bloqueado.
 app.put('/usuarios/:email', async (req, res) => {
-    const { email } = req.params;
+    const emailUsuario = req.params.email.trim().toLowerCase();
     const { nombre, password } = req.body;
     
-    let updateData = {};
-    if (nombre) updateData.nombre = nombre;
-    if (password) {
-        updateData.password = await bcrypt.hash(password, SALT_ROUNDS);
+    console.log(`=== ACTUALIZACIÓN DE PERFIL (SOLO NOMBRE/PASSWORD) ===`);
+    console.log(`Usuario a editar: ${emailUsuario}`);
+    console.log(`Datos recibidos:`, { nombre, password: password ? "******" : "No enviado" });
+
+    try {
+        let updateData = {};
+        
+        if (nombre && nombre.trim() !== '') {
+            updateData.nombre = nombre.trim();
+        }
+        
+        if (password) {
+            updateData.password = await bcrypt.hash(password, SALT_ROUNDS);
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "No se proporcionaron datos nuevos para actualizar." 
+            });
+        }
+
+        const { data, error: errorUpdate } = await supabase
+            .from('usuarios')
+            .update(updateData)
+            .eq('email', emailUsuario)
+            .select();
+
+        if (errorUpdate) {
+            return res.status(400).json({ success: false, error: errorUpdate.message });
+        }
+
+        if (data && data.length > 0) {
+            const { password: _, ...usuarioActualizado } = data[0];
+            return res.json({ 
+                success: true, 
+                message: "Nombre de usuario actualizado con éxito.",
+                user: usuarioActualizado 
+            });
+        }
+
+        res.status(404).json({ 
+            success: false, 
+            error: "No se encontró el usuario en la base de datos." 
+        });
+
+    } catch (e) {
+        console.error("❌ Error al actualizar el perfil:", e.message);
+        res.status(500).json({ success: false, error: "Error interno del servidor." });
     }
-
-    const { error } = await supabase
-        .from('usuarios')
-        .update(updateData)
-        .eq('email', email.trim().toLowerCase());
-
-    if (error) return res.status(400).json(error);
-    res.json({ success: true });
 });
 
-// Modificar tiempo de una reserva
+// Modificar tiempo/pago de una reserva de forma libre
 app.put('/modificar-reserva/:id', async (req, res) => {
     const { id } = req.params;
     const { horas_reservadas, total_pago } = req.body;
@@ -490,8 +571,30 @@ app.delete('/parqueaderos/:id', async (req, res) => {
     res.json({ success: true });
 });
 
+// BORRAR RESERVA (Admin)
+app.delete('/borrar-reserva/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data: reserva } = await supabase.from('reservas').select('*').eq('id', id).single();
+        
+        if (reserva && reserva.estado === 'activa') {
+            const { data: p } = await supabase.from('parqueaderos').select('cupos_disponibles').eq('id', reserva.parqueadero_id).single();
+            if (p) {
+                await supabase.from('parqueaderos').update({ cupos_disponibles: p.cupos_disponibles + reserva.cantidad_celdas }).eq('id', reserva.parqueadero_id);
+            }
+        }
+
+        const { error } = await supabase.from('reservas').delete().eq('id', id);
+        if (error) return res.status(400).json({ error: error.message });
+
+        res.json({ success: true, message: "Reserva eliminada físicamente de la base de datos." });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- INICIALIZACIÓN DEL ENTORNO ---
 const PORT = 3001;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ SERVIDOR UNIFICADO Y BLINDADO EN: http://192.168.1.70:${PORT}`);
+    console.log(`✅ SERVIDOR UNIFICADO EN: http://192.168.1.70:${PORT}`);
 });
