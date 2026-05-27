@@ -15,13 +15,16 @@ const supabase = createClient(SB_URL, SB_KEY);
 
 const SALT_ROUNDS = 10; // Fuerza de encriptación para bcrypt
 
+// REGLA DE NEGOCIO: Token maestro obligatorio para el rol de dueño en el Servidor
+const CODIGO_DUEÑO_VALIDO = "PARQUEA2026";
+
 // ==========================================
 // --- MÉTODOS GET (Consultas) --------------
 // ==========================================
 
 // Ruta principal de control
 app.get('/', (req, res) => {
-    res.send('🚀 Servidor de ParqueaFácil Medellín - ACTIVO');
+    res.send('🚀 Servidor de ParqueaFácil Medellín - ACTIVO Y SEGURO');
 });
 
 // Obtener todos los parqueaderos operativos
@@ -200,6 +203,7 @@ app.get('/admin/metricas/:parqueadero_id', async (req, res) => {
         const porcentajeOcupacion = p.cupos_totales > 0 ? Math.round((celdasOcupadas / p.cupos_totales) * 100) : 0;
 
         res.json({
+            id_parqueadero: parqueadero_id,
             ingresos_totales: ingresosTotales,
             ocupacion_actual: `${porcentajeOcupacion}%`,
             cupos_disponibles: p.cupos_disponibles
@@ -217,6 +221,11 @@ app.get('/admin/metricas/:parqueadero_id', async (req, res) => {
 // Autenticación: Login Seguro con Bcrypt
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
+    
+    if (!email || !password) {
+        return res.status(400).json({ error: "El correo y la contraseña son obligatorios." });
+    }
+
     const correoLimpio = email.trim().toLowerCase();
     
     const { data: usuario, error } = await supabase
@@ -235,9 +244,23 @@ app.post('/login', async (req, res) => {
     res.json(usuarioSeguro);
 });
 
-// Autenticación: Registro con hasheo de contraseñas de seguridad
+// Autenticación: Registro con hasheo de contraseñas de seguridad y validación de rol
 app.post('/registro', async (req, res) => {
-    const { nombre, email, password, rol } = req.body;
+    const { nombre, email, password, rol, codigo_admin } = req.body;
+    
+    if (!nombre || !email || !password || !rol) {
+        return res.status(400).json({ error: "Todos los campos (nombre, email, password, rol) son obligatorios." });
+    }
+
+    // 🛡️ CAPA DE SEGURIDAD AVANZADA: Control de roles e interceptación estricta del token maestro en Backend
+    if (rol === 'admin') {
+        if (!codigo_admin) {
+            return res.status(400).json({ error: "El código de acceso es requerido para registrarse como Dueño." });
+        }
+        if (codigo_admin.trim().toUpperCase() !== CODIGO_DUEÑO_VALIDO) {
+            return res.status(403).json({ error: "Código de acceso inválido. No tienes autorización corporativa." });
+        }
+    }
     
     try {
         const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
@@ -245,17 +268,23 @@ app.post('/registro', async (req, res) => {
         const { data, error } = await supabase
             .from('usuarios')
             .insert([{ 
-                nombre, 
+                nombre: nombre.trim(), 
                 email: email.trim().toLowerCase(), 
                 password: hashedPassword, 
                 rol 
             }])
             .select();
 
-        if (error) return res.status(400).json(error);
+        if (error) {
+            // Código de error típico para registros de llaves duplicadas (Unique constraint en postgres)
+            if (error.code === '23505') {
+                return res.status(400).json({ error: "Este correo electrónico ya se encuentra registrado." });
+            }
+            return res.status(400).json({ error: error.message });
+        }
         res.status(201).json(data);
     } catch (e) {
-        res.status(500).json({ error: "Error en el proceso de registro" });
+        res.status(500).json({ error: "Error en el proceso de registro del servidor" });
     }
 });
 
@@ -455,14 +484,13 @@ app.post('/liberar-cupo', async (req, res) => {
 // --- MÉTODOS PUT (Actualizaciones) --------
 // ==========================================
 
-// 🔄 GESTIÓN DE PERFILES: Actualiza únicamente Nombre y Contraseña. Correo Electrónico Bloqueado.
+// 🔄 GESTIÓN DE PERFILES: Actualiza Nombre y Contraseña. Correo Electrónico Bloqueado.
 app.put('/usuarios/:email', async (req, res) => {
     const emailUsuario = req.params.email.trim().toLowerCase();
     const { nombre, password } = req.body;
     
     console.log(`=== ACTUALIZACIÓN DE PERFIL (SOLO NOMBRE/PASSWORD) ===`);
     console.log(`Usuario a editar: ${emailUsuario}`);
-    console.log(`Datos recibidos:`, { nombre, password: password ? "******" : "No enviado" });
 
     try {
         let updateData = {};
@@ -496,7 +524,7 @@ app.put('/usuarios/:email', async (req, res) => {
             const { password: _, ...usuarioActualizado } = data[0];
             return res.json({ 
                 success: true, 
-                message: "Nombre de usuario actualizado con éxito.",
+                message: "Perfil actualizado con éxito.",
                 user: usuarioActualizado 
             });
         }
