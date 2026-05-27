@@ -621,8 +621,11 @@ app.delete('/borrar-reserva/:id', async (req, res) => {
     }
 });
 
-// --- INICIALIZACIÓN DEL ENTORNO ---
-const PORT = 3001;
+// --- INICIALIZACIÓN DEL ENTORNO ADAPTADA PARA PRODUCCIÓN ---
+// process.env.PORT permite que la nube (Render/Railway) asigne el puerto dinámico de forma automática
+const PORT = process.env.PORT || 3001;
+
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ SERVIDOR UNIFICADO EN: http://192.168.1.70:${PORT}`);
+    console.log(`✅ SERVIDOR PARQUEAFÁCIL DESPLEGADO EXITOSAMENTE`);
+    console.log(`🚀 Escuchando peticiones globales en el puerto: ${PORT}`);
 });
